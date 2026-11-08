@@ -1,0 +1,4 @@
+*.sys
+*.log
+*.txt
+.vagrant/
