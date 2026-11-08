@@ -42,6 +42,9 @@ Kernel-level EDR evasion toolkit for authorized penetration testing. Uses RootLa
 # Kill EDR processes (strips protections then terminates)
 .\Invoke-KernelReaper.ps1 -EDRKill
 
+# Kill EDR processes in loop for 5 minutes (re-kills on respawn)
+.\Invoke-KernelReaper.ps1 -EDRKill -KillDuration 300
+
 # Run all modules
 .\Invoke-KernelReaper.ps1 -All
 
